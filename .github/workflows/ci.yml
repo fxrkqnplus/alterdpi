@@ -19,4 +19,6 @@ jobs:
       - run: dotnet build src/AlterDPI.App -c Release
       - run: dotnet run --project tests/AlterDPI.Tests -- "$pwd"
       - run: node tests/browser.test.cjs
+      - run: powershell -NoProfile -ExecutionPolicy RemoteSigned -File tests/network.test.ps1
+      - run: dotnet run --project tests/AlterDPI.UiTests
       - run: ./tools/build.ps1 -UnsignedCi

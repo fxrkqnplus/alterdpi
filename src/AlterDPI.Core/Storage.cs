@@ -34,11 +34,13 @@ public sealed class Store(string root)
 }
 public sealed class Journal(Store store)
 {
-    public string Log(Problem p, string phase = "")
+    public string Log(Problem p, string phase = "", Exception? exception = null)
     {
         var dir = Path.Combine(store.Root, "kayitlar"); Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, $"hata-{DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid().ToString("N")[..6]}.json");
-        File.WriteAllText(file, JsonSerializer.Serialize(new { time = DateTimeOffset.Now, phase, problem = p }, Product.Json), new UTF8Encoding(false));
+        // Record stable diagnostic codes and method names, never exception messages, URLs or local paths.
+        var diagnostic = exception == null ? null : new { type = exception.GetType().Name, hresult = exception.HResult.ToString("X8"), nativeExit = (exception as NativeCommandException)?.ExitCode, command = (exception as NativeCommandException)?.Command, innerType = exception.InnerException?.GetType().Name, methods = new System.Diagnostics.StackTrace(exception, false).GetFrames().Take(6).Select(x => x.GetMethod()?.DeclaringType?.Name + "." + x.GetMethod()?.Name).ToArray() };
+        File.WriteAllText(file, JsonSerializer.Serialize(new { time = DateTimeOffset.Now, phase, problem = p, diagnostic }, Product.Json), new UTF8Encoding(false));
         foreach (var old in new DirectoryInfo(dir).GetFiles("hata-*.json").OrderByDescending(x => x.CreationTimeUtc).Skip(30)) old.Delete();
         return file;
     }
@@ -60,6 +62,9 @@ public static class Problems
             "INTEGRITY" => new("INTEGRITY", "Dosya imzası veya özeti doğrulanamadı.", "Dosya kullanılmadı.", "Resmî depodan doğru paketi yeniden indirin."),
             "NO_PROFILE" => new("NO_PROFILE", "Denenen bağlantı yolları doğrulanamadı.", "Erişim etkinleştirilemedi; önceki durum korundu.", "Normal interneti, sağlayıcı kısıtını ve kayıt dosyasını kontrol edin."),
             "TRANSIENT" => new("REMOTE_LIMIT", "Uzak servis geçici olarak isteği reddetti.", "Ağ profili için kesin sonuç alınamadı.", "Bir süre sonra tekrar deneyin.", "warning"),
+            "LEGACY_DNS" => new("LEGACY_DNS", "Önceki DNS yedeğinin biçimi okunamadı.", "Eski ayarlar henüz geri yüklenemedi; yedek korundu.", "Güncel onarım paketini kullanın; yedek dosyasını silmeyin."),
+            "NATIVE" => new("NETWORK_COMMAND", "Windows ağ işlemi tamamlanamadı.", "Ağ ayarlarının geri yüklenmesi tekrar denenecek.", "Kayıttaki işlem ve hata kodunu destek için paylaşın."),
+            "SERVICE" => new("SERVICE", "Arka plan hizmeti yanıt vermiyor.", "Bağlantı durumu şu anda doğrulanamıyor.", "Kurulumu onarın; pencereyi tepsi menüsünden kapatabilirsiniz.", "warning"),
             "DNS_UNAVAILABLE" => new("DNS_UNAVAILABLE", "DNS yollarından yanıt alınamadı.", "Yeni alan adları çözülemeyebilir; yerel engel listesi korunuyor.", "İnternet bağlantısını ve DNS erişimini kontrol edin.", "warning"),
             "ENGINE_BUSY" => new("ENGINE_BUSY", "Başka bir paket işleme uygulaması çalışıyor.", "Çakışma nedeniyle ikinci motor başlatılmadı.", "Diğer kopyayı kapatıp yeniden deneyin."),
             "ENGINE_START" => new("ENGINE_START", "Ağ motoru çalışır durumda kalmadı.", "Bağlantı uyarlaması uygulanamadı.", "Windows sürücü, imza ve güvenlik yazılımı olaylarını inceleyin."),

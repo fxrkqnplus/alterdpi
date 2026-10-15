@@ -5,6 +5,12 @@ using System.Text.Json;
 
 namespace AlterDPI.Core;
 
+public sealed class NativeCommandException(string command, int exitCode, string code) : InvalidOperationException(code)
+{
+    public string Command { get; } = Path.GetFileName(command);
+    public int ExitCode { get; } = exitCode;
+}
+
 public static class Native
 {
     public static int HopLimit => IPGlobalProperties.GetIPGlobalProperties().GetIPv4GlobalStatistics().DefaultTtl;
@@ -14,7 +20,7 @@ public static class Native
         start.Environment["PSModulePath"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "Modules");
         foreach (var key in start.Environment.Keys.Where(x => x.StartsWith("DOTNET_", StringComparison.OrdinalIgnoreCase) || x.StartsWith("CORECLR_", StringComparison.OrdinalIgnoreCase) || x.StartsWith("COR_", StringComparison.OrdinalIgnoreCase)).ToArray()) start.Environment.Remove(key);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("PROCESS"); using var limit = CancellationTokenSource.CreateLinkedTokenSource(token); limit.CancelAfter(timeout);
-        try { var output = process.StandardOutput.ReadToEndAsync(limit.Token); var error = process.StandardError.ReadToEndAsync(limit.Token); await process.WaitForExitAsync(limit.Token); var result = await output; await error; if (result.Length > 1024 * 1024 || process.ExitCode != 0) throw new InvalidOperationException(process.ExitCode switch { 10 => "NO_NETWORK", 12 => "POLICY_CONFLICT", _ => "NATIVE" }); return result.Trim(); }
+        try { var output = process.StandardOutput.ReadToEndAsync(limit.Token); var error = process.StandardError.ReadToEndAsync(limit.Token); await process.WaitForExitAsync(limit.Token); var result = await output; var errorText = await error; if (result.Length > 1024 * 1024 || process.ExitCode != 0) throw new NativeCommandException(file, process.ExitCode, process.ExitCode switch { 10 => "NO_NETWORK", 12 => "POLICY_CONFLICT", _ => errorText.Contains("LEGACY_DNS", StringComparison.Ordinal) ? "LEGACY_DNS" : "NATIVE" }); return result.Trim(); }
         catch { if (!process.HasExited) process.Kill(true); throw; }
     }
     public static Task<string> Policy(string action, CancellationToken token, string? data = null)

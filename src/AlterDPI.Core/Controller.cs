@@ -23,6 +23,7 @@ public sealed class Controller : IDisposable
     private DateTimeOffset nextData = DateTimeOffset.MinValue;
     private DateTimeOffset nextHealth = DateTimeOffset.MinValue, nextRetry = DateTimeOffset.MinValue;
     private bool timerBusy;
+    private bool cleanupPending;
     public AppState State => state with { Exceptions = Threats.ActiveExceptions(), ListVersion = Threats.Version, DomainCount = Threats.Count, HopLimit = Native.HopLimit, ListStale = Threats.Count > 0 && DateTimeOffset.UtcNow > Threats.Expires };
     public event Action<AppState>? Changed;
     public Controller(Store? store = null, INetworkEngine? engine = null)
@@ -33,13 +34,18 @@ public sealed class Controller : IDisposable
     }
     public async Task Initialize(CancellationToken token)
     {
+        await gate.WaitAsync(token);
+        try
+        {
         Trust.VerifyInstalled(AppContext.BaseDirectory); await policy.Recover(token); await Native.Policy("LegacyResume", token);
         var seed = Path.Combine(AppContext.BaseDirectory, "security"); Threats.Load(seed); var last = Store.Read<long>("security-active.json"); if (last > Threats.Version) { try { Threats.Load(Path.Combine(Store.Root, "security-" + last)); } catch { Report(new InvalidDataException("INTEGRITY")); } }
         NetworkChange.NetworkAddressChanged += OnNetwork; NetworkChange.NetworkAvailabilityChanged += OnAvailability; timer.Change(3000, 3000); Publish(new() { Stage = "Hazır" });
+        }
+        finally { gate.Release(); }
     }
     private void Publish(AppState value) { lock (stateLock) state = value with { Revision = Interlocked.Increment(ref generation) }; Changed?.Invoke(State); }
     private void CancelSelection() { lock (selectionLock) selection?.Cancel(); }
-    private void Report(Exception error) { var p = Problems.From(error); var file = journal.Log(p, state.Stage); Publish(state with { Level = p.Level, Problem = p, LogFile = file, Stage = "Kontrol gerekiyor" }); }
+    private void Report(Exception error) { var p = Problems.From(error); var file = journal.Log(p, state.Stage, error); Publish(state with { Level = p.Level, Problem = p, LogFile = file, Stage = "Kontrol gerekiyor" }); }
     public async Task<ControlReply> Execute(ControlRequest request, CancellationToken token)
     {
         try
@@ -63,7 +69,11 @@ public sealed class Controller : IDisposable
                 default: return new(false, State, Problem: new("REQUEST", "Geçersiz istek.", "İşlem yapılmadı.", "Uygulamayı yeniden açın."));
             }
         }
-        catch (Exception e) when (e is not OutOfMemoryException) { Report(e); return new(false, State, Problem: Problems.From(e)); }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            if (request.Operation is "check-update" or "download-update") { var p = Problems.From(e); journal.Log(p, "Güncelleme", e); return new(false, State, Problem: p); }
+            Report(e); return new(false, State, Problem: Problems.From(e));
+        }
     }
     private async Task Configure(bool access, bool protection, CancellationToken token)
     {
@@ -74,7 +84,12 @@ public sealed class Controller : IDisposable
         {
             await gate.WaitAsync(cts.Token); entered = true; before = state; oldNetwork = network; oldResolver = dns.Selected; cts.Token.ThrowIfCancellationRequested();
             Publish(state with { Stage = "Ağ kontrol ediliyor", Level = "warning", Problem = null });
-            if (!access && !protection) { engine.Stop(); await policy.Remove(CancellationToken.None); dns.Stop(); Revoke(Threats.ClearExceptions()); await Native.Policy("LegacyResume", CancellationToken.None); preferences = preferences with { Access = false, Protection = false }; Store.Write("preferences.json", preferences); Publish(new() { Stage = "Kapalı" }); return; }
+            if (!access && !protection)
+            {
+                preferences = preferences with { Access = false, Protection = false }; Store.Write("preferences.json", preferences);
+                cleanupPending = true; engine.Stop(); dns.SetProtection(false); await policy.Remove(CancellationToken.None); dns.Stop(); Revoke(Threats.ClearExceptions()); await Native.Policy("LegacyResume", CancellationToken.None);
+                cleanupPending = false; Publish(new() { Stage = "Kapalı" }); return;
+            }
             var n = await Native.Network(Store, cts.Token); network = n; var effective = n with { Key = Store.Fingerprint(new[] { n.Key, engine.Identity, protection.ToString() }) };
             await Native.Policy("LegacyPause", cts.Token);
             var cached = Store.Cached(effective, engine.Identity); dns.Configure(n, cached?.Resolver ?? "system", protection); dns.Start(); await policy.Apply(cts.Token);
@@ -83,13 +98,14 @@ public sealed class Controller : IDisposable
             GoodProfile? good = null;
             if (cached != null) good = await TryProfiles(effective, [cached.Resolver], cached.Profile, cts.Token, [Profiles.All.Single(p => p.Id == cached.Profile)]);
             good ??= await TryProfiles(effective, ["system"], null, cts.Token, [Profiles.All[0]]);
-            if (good == null) { var ranked = await dns.Rank(n, protection, cts.Token); good = await TryProfiles(effective, ranked, null, cts.Token, [Profiles.All[0]]); good ??= await TryProfiles(effective, ranked, null, cts.Token, Profiles.Ordered(n).Where(p => p.Id != "direct").ToArray()); }
+            if (good == null) { var ranked = await dns.Rank(n, protection, cts.Token); good = await TryProfiles(effective, ranked, null, cts.Token, [Profiles.All[0]]); good ??= await TryProfiles(effective, ranked.Take(2), null, cts.Token, Profiles.Ordered(n).Where(p => p.Id != "direct").ToArray()); }
             if (good == null) throw new InvalidOperationException("NO_PROFILE");
-            cts.Token.ThrowIfCancellationRequested(); Store.SaveProfile(good); preferences = preferences with { Access = true, Protection = protection }; Store.Write("preferences.json", preferences);
-            Publish(new() { Access = true, Protection = protection, ProtectionMode = protection ? (n.Family == 6 ? "Yerel liste etkin" : "Etkin") : "Kapalı", Stage = "Bağlantı hazır", Level = "success", Profile = Profiles.All.Single(p => p.Id == good.Profile).Label, Network = n.Adapter, LatencyMs = good.LatencyMs });
+            cts.Token.ThrowIfCancellationRequested(); cleanupPending = false; Store.SaveProfile(good); preferences = preferences with { Access = true, Protection = protection }; Store.Write("preferences.json", preferences);
+            Publish(new() { Access = true, Protection = protection, ProtectionMode = protection ? (n.Family == 6 ? "Yerel liste etkin" : "Etkin") : "Kapalı", Stage = good.Partial ? "Bağlantı hazır · kontrol sınırlı" : "Bağlantı hazır", Level = good.Partial ? "warning" : "success", Profile = Profiles.All.Single(p => p.Id == good.Profile).Label, Network = n.Adapter, LatencyMs = good.LatencyMs });
         }
         catch
         {
+            if (entered && !access && !protection) { Publish(new() { Stage = "Ağ ayarları geri yükleniyor", Level = "warning" }); throw; }
             if (entered) try { network = oldNetwork; if (before.Access || before.Protection) { await Native.Policy("LegacyPause", CancellationToken.None); if (oldNetwork != null) dns.Configure(oldNetwork, oldResolver, before.Protection); dns.Start(); await policy.Apply(CancellationToken.None); var previous = Profiles.All.FirstOrDefault(p => p.Label == before.Profile) ?? Profiles.All[0]; await engine.Apply(previous, CancellationToken.None); Publish(before); } else { engine.Stop(); await policy.Remove(CancellationToken.None); dns.Stop(); await Native.Policy("LegacyResume", CancellationToken.None); Publish(before); } } catch (Exception rollback) { Report(rollback); }
             throw;
         }
@@ -104,9 +120,9 @@ public sealed class Controller : IDisposable
             {
                 dns.Select(resolver);
                 token.ThrowIfCancellationRequested(); Publish(state with { Stage = "Bağlantı yöntemi kontrol ediliyor" }); await engine.Apply(profile, token); var result = await Probes.Check(false, token);
-                if (result.Ok) { var candidate = new GoodProfile(n.Key, engine.Identity, profile.Id, resolver, result.LatencyMs, DateTimeOffset.UtcNow); if (previous != null || profile.Id == "direct") return candidate; if (best == null || candidate.LatencyMs < best.LatencyMs) best = candidate; }
+                if (result.Ok) { var candidate = new GoodProfile(n.Key, engine.Identity, profile.Id, resolver, result.LatencyMs, DateTimeOffset.UtcNow, result.Partial); if (previous != null || profile.Id == "direct") return candidate; if (best == null || candidate.LatencyMs < best.LatencyMs) best = candidate; }
                 if (best != null && ++compared >= 2) { dns.Select(best.Resolver); await engine.Apply(Profiles.All.Single(p => p.Id == best.Profile), token); return best; }
-                if (result.Transient && best == null) throw new InvalidOperationException("TRANSIENT");
+                // A temporary endpoint refusal must not skip the remaining network profiles.
             }
         }
         if (best != null) { dns.Select(best.Resolver); await engine.Apply(Profiles.All.Single(p => p.Id == best.Profile), token); }
@@ -125,6 +141,7 @@ public sealed class Controller : IDisposable
         if (timerBusy || lifetime.IsCancellationRequested) return; timerBusy = true;
         try
         {
+            if (cleanupPending && selection == null && DateTimeOffset.UtcNow >= nextRetry) { nextRetry = DateTimeOffset.UtcNow.AddSeconds(30); await Configure(false, false, lifetime.Token); return; }
             var revoked = Threats.RevokeExpired(); if (revoked.Length > 0) { Revoke(revoked); Publish(state); }
             if (state.Access && state.Profile != Profiles.All[0].Label && !engine.Running && selection == null && DateTimeOffset.UtcNow >= nextRetry) { nextRetry = DateTimeOffset.UtcNow.AddMinutes(2); NetworkChanged(true); }
             if (state.Access && selection == null && DateTimeOffset.UtcNow >= nextHealth) { nextHealth = DateTimeOffset.UtcNow.AddMinutes(5); var health = await Probes.Check(false, lifetime.Token); if (!health.Ok && !health.Transient && selection == null) NetworkChanged(true); }

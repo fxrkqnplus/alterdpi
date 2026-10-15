@@ -1,6 +1,7 @@
 ﻿param([ValidateSet('Read','Apply','Remove','LegacyPause','LegacyResume')][string]$Action,[string]$Data='')
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+Import-Module (Join-Path $PSScriptRoot 'LegacyDns.psm1') -Force
 $owner='AlterDPI.Managed.34B7F47A-2168-4DD3-9211-506FA4496890'
 if($Action -eq 'Read'){
  $active=@(Get-NetIPInterface|Where-Object{[int]$_.ConnectionState -eq 1}|ForEach-Object{$_.InterfaceIndex})
@@ -48,7 +49,7 @@ $domains=@('discord.com','discord.gg','discordapp.com','discordapp.net','discord
 $owned=@(Get-DnsClientNrptRule|Where-Object{$_.Comment -in $comments -and @($_.Namespace|Where-Object{$_.TrimStart('.') -notin $domains}).Count -eq 0})
 if($Action -eq 'LegacyPause'){
  if(!(Test-Path -LiteralPath $journal)){
-  $snapshot=[ordered]@{taskEnabled=($ownTask -and $t.State -ne 'Disabled');taskRunning=($ownTask -and $t.State -eq 'Running');serviceRunning=($s -and $s.State -eq 'Running');serviceMode=if($s){$s.StartMode}else{''};rules=@($owned|ForEach-Object{[ordered]@{namespace=@($_.Namespace);nameServers=@($_.NameServers);comment=$_.Comment}})}
+  $snapshot=[ordered]@{taskEnabled=($ownTask -and $t.State -ne 'Disabled');taskRunning=($ownTask -and $t.State -eq 'Running');serviceRunning=($s -and $s.State -eq 'Running');serviceMode=if($s){$s.StartMode}else{''};rules=@($owned|ForEach-Object{[ordered]@{namespace=@($_.Namespace|ForEach-Object{[string]$_});nameServers=@($_.NameServers|ConvertTo-DnsServerText);comment=[string]$_.Comment}})}
   $temp=$journal+'.tmp';[IO.File]::WriteAllText($temp,($snapshot|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false));Move-Item -LiteralPath $temp -Destination $journal -Force
  }
  if($ownTask){Disable-ScheduledTask -TaskName $t.TaskName|Out-Null;Stop-ScheduledTask -TaskName $t.TaskName -ErrorAction SilentlyContinue}
@@ -57,7 +58,7 @@ if($Action -eq 'LegacyPause'){
 }else{
  if(!(Test-Path -LiteralPath $journal)){exit 0}
  $before=Get-Content -LiteralPath $journal -Raw|ConvertFrom-Json
- foreach($r in $before.rules){if($r.comment -notin $comments -or @($r.namespace|Where-Object{$_.TrimStart('.') -notin $domains}).Count){exit 13};if(-not @($owned|Where-Object{$_.Comment -eq $r.comment -and ($_.Namespace -join ',') -eq ($r.namespace -join ',')}).Count){Add-DnsClientNrptRule -Namespace $r.namespace -NameServers $r.nameServers -Comment $r.comment -DisplayName $r.comment|Out-Null}}
+ foreach($r in $before.rules){if($r.comment -notin $comments -or @($r.namespace|Where-Object{$_.TrimStart('.') -notin $domains}).Count){exit 13};$servers=@($r.nameServers|ConvertTo-DnsServerText);if(-not $servers.Count){exit 13};if(-not @($owned|Where-Object{$_.Comment -eq $r.comment -and ($_.Namespace -join ',') -eq ($r.namespace -join ',')}).Count){Add-DnsClientNrptRule -Namespace $r.namespace -NameServers $servers -Comment $r.comment -DisplayName $r.comment|Out-Null}}
  if($s){$mode=switch($before.serviceMode){'Auto'{'Automatic'} 'Disabled'{'Disabled'} default{'Manual'}};Set-Service -Name GoodbyeDPI -StartupType $mode;if($before.serviceRunning){Start-Service -Name GoodbyeDPI}}
  if($ownTask -and $before.taskEnabled){Enable-ScheduledTask -TaskName $t.TaskName|Out-Null;if($before.taskRunning){Start-ScheduledTask -TaskName $t.TaskName}}
  Remove-Item -LiteralPath $journal

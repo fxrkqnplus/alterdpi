@@ -28,7 +28,8 @@ public static class Install
         using (var key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\AlterDPI")) { key.SetValue("OwnerSid", owner); key.SetValue("InstallPath", Product.InstallRoot); }
         File.WriteAllText(Path.Combine(Product.InstallRoot, "install.owner"), Marker);
         foreach (var file in Directory.GetFiles(Product.InstallRoot, "*.ps1")) try { File.Delete(file + ":Zone.Identifier"); } catch (IOException) { }
-        await Sc(["create", Product.Service, "binPath=", ServiceImage, "start=", "auto", "DisplayName=", "AlterDPI Arka Plan Hizmeti"]);
+        var serviceExists = Registry.GetValue(@"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\AlterDPI", "ImagePath", null) != null;
+        await Sc([serviceExists ? "config" : "create", Product.Service, "binPath=", ServiceImage, "start=", "auto", "DisplayName=", "AlterDPI Arka Plan Hizmeti"]);
         await Sc(["sdset", Product.Service, $"D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWRPWPLOCRRC;;;{owner})"]);
         await Sc(["failure", Product.Service, "reset=", "86400", "actions=", "restart/1000/restart/5000/restart/10000"]); await Sc(["failureflag", Product.Service, "1"]);
         var hostDir = Path.Combine(Product.InstallRoot, "browser"); var browser = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(Path.Combine(hostDir, "browser.json")), Product.Json);
@@ -44,12 +45,17 @@ public static class Install
             registration.SetValue("", path);
         }
         SetTreeAcl(Product.InstallRoot, "S-1-5-32-545");
-        var store = new Store(Product.StateRoot); store.Write("app-build.json", Math.Max(store.Read<long>("app-build.json"), manifest.Build)); await Sc(["start", Product.Service]);
+        var store = new Store(Product.StateRoot); store.Write("app-build.json", Math.Max(store.Read<long>("app-build.json"), manifest.Build));
+        using var configured = new ServiceController(Product.Service); if (configured.Status != ServiceControllerStatus.Running) await Sc(["start", Product.Service]);
     }
     public static async Task Unconfigure(bool upgrade = false)
     {
         RequireAdmin(); RequireRoot(); RequireOwned(Product.InstallRoot, "install.owner"); RequireService();
-        if (upgrade) foreach (var p in Process.GetProcessesByName("AlterDPI")) using (p) { if (p.Id != Environment.ProcessId && p.SessionId != 0 && string.Equals(ProcessIdentity.Image((uint)p.Id), Path.Combine(Product.InstallRoot, "AlterDPI.exe"), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("APP_RUNNING"); }
+        foreach (var p in Process.GetProcessesByName("AlterDPI")) using (p)
+        {
+            if (p.Id == Environment.ProcessId || p.SessionId != Process.GetCurrentProcess().SessionId || !string.Equals(ProcessIdentity.Image((uint)p.Id), Path.Combine(Product.InstallRoot, "AlterDPI.exe"), StringComparison.OrdinalIgnoreCase)) continue;
+            p.Kill(); using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(5)); await p.WaitForExitAsync(wait.Token);
+        }
         foreach (var p in Process.GetProcessesByName("AlterDPI.Native")) using (p) { if (string.Equals(ProcessIdentity.Image((uint)p.Id), Path.Combine(Product.InstallRoot, "AlterDPI.Native.exe"), StringComparison.OrdinalIgnoreCase)) p.Kill(); }
         await StopService(); await Native.Policy("Remove", CancellationToken.None);
         if (Registry.GetValue(@"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\AlterDPI", "ImagePath", null) != null) await Sc(["delete", Product.Service]);
@@ -87,7 +93,14 @@ public static class Install
     private static void RequireService() { var image = Registry.GetValue(@"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\AlterDPI", "ImagePath", null) as string; if (image != null && !image.Equals(ServiceImage, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("SERVICE_OWNER"); }
     private static async Task StopService()
     {
-        using var service = new ServiceController(Product.Service); try { if (service.Status != ServiceControllerStatus.Stopped) { service.Stop(); await Task.Run(() => service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(25))); } } catch (InvalidOperationException e) when (e.InnerException is System.ComponentModel.Win32Exception { NativeErrorCode: 1060 }) { }
+        using var service = new ServiceController(Product.Service);
+        try
+        {
+            if (service.Status == ServiceControllerStatus.Stopped) return;
+            if (service.Status != ServiceControllerStatus.StopPending) service.Stop();
+            await Task.Run(() => service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(65)));
+        }
+        catch (InvalidOperationException e) when (e.InnerException is System.ComponentModel.Win32Exception { NativeErrorCode: 1060 }) { }
     }
     private static Task<string> Sc(string[] args) => Native.Run(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "sc.exe"), args, CancellationToken.None);
     private static void SetTreeAcl(string root, string reader)

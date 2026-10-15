@@ -46,8 +46,9 @@ public static class Program
         }
         catch (Exception e)
         {
-            var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Product.Name); var p = Problems.From(e); var file = new Journal(new Store(root)).Log(p, "Başlatma");
-            if (!args.Contains("--render-preview")) System.Windows.MessageBox.Show(p.Cause + "\n\n" + p.Solution + "\n\nKayıt: " + file, Product.Name, MessageBoxButton.OK, MessageBoxImage.Warning); return 1;
+            var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Product.Name); var p = Problems.From(e); var file = new Journal(new Store(root)).Log(p, "Başlatma", e);
+            var maintenance = args.Any(x => x is "--configure" or "--restore" or "--unconfigure" or "--prepare-upgrade" or "--delete-logs" or "--keep-logs" or "--validate-backup");
+            if (!maintenance && !args.Contains("--render-preview")) System.Windows.MessageBox.Show(p.Cause + "\n\n" + p.Solution + "\n\nKayıt: " + file, Product.Name, MessageBoxButton.OK, MessageBoxImage.Warning); return 1;
         }
     }
 }
@@ -62,12 +63,16 @@ public sealed class NetworkService : ServiceBase
         {
             try { controller = new Controller(); await controller.Initialize(lifetime.Token); await new PipeServer(controller).Run(lifetime.Token); }
             catch (OperationCanceledException) { }
-            catch (Exception e) { new Journal(new Store(Product.StateRoot)).Log(Problems.From(e), "Hizmet"); ExitCode = 1067; Stop(); }
+            catch (Exception e) { new Journal(new Store(Product.StateRoot)).Log(Problems.From(e), "Hizmet", e); ExitCode = 1067; _ = Task.Run(Stop); }
         });
     }
     protected override void OnStop()
     {
-        RequestAdditionalTime(30000); lifetime.Cancel(); if (controller != null) { controller.Shutdown().GetAwaiter().GetResult(); controller.Dispose(); controller = null; }
+        try { RequestAdditionalTime(60000); } catch (InvalidOperationException) { }
+        lifetime.Cancel(); var current = Interlocked.Exchange(ref controller, null); if (current == null) return;
+        try { current.Shutdown().GetAwaiter().GetResult(); }
+        catch (Exception e) { ExitCode = 1; new Journal(new Store(Product.StateRoot)).Log(Problems.From(e), "Hizmet kapatma", e); }
+        finally { current.Dispose(); }
     }
     protected override void OnShutdown() => OnStop();
     protected override void Dispose(bool disposing) { if (disposing) lifetime.Dispose(); base.Dispose(disposing); }

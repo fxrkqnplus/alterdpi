@@ -6,6 +6,8 @@ Windows x64, .NET SDK 10.0.402, Node.js 24 ve NSIS 3.13 gerekir. Son kullanıcı
 dotnet build src/AlterDPI.App -c Release
 dotnet run --project tests/AlterDPI.Tests -- "$pwd"
 node tests/browser.test.cjs
+powershell -NoProfile -ExecutionPolicy RemoteSigned -File tests/network.test.ps1
+dotnet run --project tests/AlterDPI.UiTests
 ./tools/build.ps1 -UnsignedCi
 ```
 

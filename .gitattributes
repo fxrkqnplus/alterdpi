@@ -4,5 +4,6 @@ third_party/engine/** -text
 third_party/licenses/** -text
 *.png binary
 *.ico binary
+*.bmp binary
 *.zip binary
 *.sig binary

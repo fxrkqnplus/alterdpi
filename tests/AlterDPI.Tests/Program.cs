@@ -20,6 +20,16 @@ try
 {
     Check("version", Product.DisplayVersion == "0.5.0fx");
     Check("features-default-off", new Preferences() is { Consent: false, Access: false, Protection: false });
+    Check("probe-all-confirmed", Probes.Evaluate([new(true, 10), new(true, 20), new(true, 30)]).Ok);
+    var probeLimited = Probes.Evaluate([new(true, 10), new(true, 20), new(false, 30, "C02", true)]);
+    Check("probe-waf-does-not-abort-confirmed-path", probeLimited.Ok && probeLimited.Partial);
+    Check("probe-baseline-required", !Probes.Evaluate([new(false, 10, "C00"), new(true, 20), new(true, 30)]).Ok);
+    Check("probe-protected-endpoint-required", !Probes.Evaluate([new(true, 10), new(false, 20, "C01", true), new(false, 30, "C02", true)]).Ok);
+    var diagnosticLog = new Journal(new Store(scratch)).Log(Problems.From(new IOException("SERVICE")), "Test", new NativeCommandException("C:\\private\\powershell.exe", 13, "NATIVE"));
+    var diagnosticText = File.ReadAllText(diagnosticLog);
+    Check("journal-retains-native-code", diagnosticText.Contains("nativeExit\":13", StringComparison.Ordinal));
+    Check("journal-redacts-path", !diagnosticText.Contains("private", StringComparison.Ordinal));
+    Check("legacy-diagnostic-actionable", Problems.From(new InvalidOperationException("LEGACY_DNS")).Code == "LEGACY_DNS");
     Check("host-case", Threats.Normalize("EXAMPLE.COM.") == "example.com");
     Check("host-idna", Threats.Normalize("örnek.com").StartsWith("xn--", StringComparison.Ordinal));
     foreach (var h in new[] { "evil.com/path", "*.evil.com", "user@evil.com", "evil.com:443", "x..com", "-x.com", "x\n.com" }) Reject("host-invalid", () => Threats.Normalize(h));

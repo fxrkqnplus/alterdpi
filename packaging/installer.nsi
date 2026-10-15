@@ -5,6 +5,9 @@ Unicode true
 !include "nsDialogs.nsh"
 !include "WinVer.nsh"
 Name "AlterDPI"
+Caption "AlterDPI · Kurulum"
+UninstallCaption "AlterDPI · Kaldırma"
+BrandingText "AlterDPI · Furkan Okan"
 OutFile "..\artifacts\release\AlterDPI-Kurulum.exe"
 InstallDir "$PROGRAMFILES64\AlterDPI"
 RequestExecutionLevel admin
@@ -18,8 +21,13 @@ VIAddVersionKey /LANG=1055 "LegalCopyright" "Furkan Okan"
 !define MUI_ICON "..\assets\alterdpi.ico"
 !define MUI_UNICON "..\assets\alterdpi.ico"
 !define MUI_ABORTWARNING
+!define MUI_BGCOLOR "10151D"
+!define MUI_TEXTCOLOR "F0F4FA"
+!define MUI_INSTFILESPAGE_COLORS "F0F4FA 1A222E"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "..\assets\setup-sidebar.bmp"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "..\assets\setup-sidebar.bmp"
 !define MUI_WELCOMEPAGE_TITLE "AlterDPI 0.5.0fx"
-!define MUI_WELCOMEPAGE_TEXT "AlterDPI bağlantı yöntemlerini ağınıza göre düzenler.\r\n\r\nİlk kurulumda erişim, web koruması ve Windows başlangıcı kapalıdır.\r\n\r\nGerekli çalışma zamanı pakete dahildir; ek indirme gerekmez."
+!define MUI_WELCOMEPAGE_TEXT "AlterDPI bağlantı yöntemlerini ağınıza göre düzenler.$\r$\n$\r$\nİlk kurulumda erişim, web koruması ve Windows başlangıcı kapalıdır.$\r$\n$\r$\nGerekli çalışma zamanı pakete dahildir; ek indirme gerekmez."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN
@@ -133,7 +141,7 @@ Function un.Options
  ${EndIf}
  ${NSD_CreateLabel} 0 0 100% 38u "AlterDPI'ın hizmeti, başlangıç kaydı, tarayıcı bağlantısı ve kendi DNS kuralları kaldırılır."
  Pop $0
- ${NSD_CreateCheckbox} 0 48u 100% 28u "Yerel ayarları ve hata kayıtlarını da sil"
+ ${NSD_CreateCheckbox} 0 48u 100% 28u "Hata kayıtlarını da sil"
  Pop $LogBox
  nsDialogs::Show
 FunctionEnd
@@ -150,7 +158,7 @@ Section "Uninstall"
  IfFileExists "$INSTDIR\install.owner" 0 refused
  ExecWait '"$INSTDIR\AlterDPI.exe" --unconfigure' $Result
  ${If} $Result != 0
-  MessageBox MB_ICONSTOP "Ağ değişiklikleri güvenli biçimde geri alınamadı. Kaldırma durduruldu."
+  MessageBox MB_ICONSTOP "Ağ ayarları geri yüklenemedi. Dosyalar korundu.$\r$\n$\r$\nHata kayıtları: $LOCALAPPDATA\AlterDPI\kayitlar$\r$\nİşlem kodu: $Result"
   Abort
  ${EndIf}
  Delete "$SMPROGRAMS\AlterDPI\AlterDPI.lnk"

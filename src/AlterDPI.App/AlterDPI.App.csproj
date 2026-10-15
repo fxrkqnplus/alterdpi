@@ -1,1 +1,25 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><OutputType>WinExe</OutputType><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><StartupObject>AlterDPI.App.Program</StartupObject><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>../../assets/alterdpi.ico</ApplicationIcon><AssemblyName>AlterDPI</AssemblyName><RuntimeIdentifier>win-x64</RuntimeIdentifier><SelfContained>true</SelfContained></PropertyGroup><ItemGroup><Using Remove="System.Windows.Forms"/><Using Remove="System.Drawing"/><ProjectReference Include="../AlterDPI.Core/AlterDPI.Core.csproj"/><PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0"/></ItemGroup><ItemGroup><Resource Include="../../assets/alterdpi.png" Link="assets/alterdpi.png"/><Resource Include="../../assets/alterdpi.ico" Link="assets/alterdpi.ico"/><Content Include="../../third_party/engine/*" Link="engine/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"/><Content Include="../../assets/security/*" Link="security/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"/><Content Include="../../packaging/network.ps1" Link="network.ps1" CopyToOutputDirectory="PreserveNewest"/></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <StartupObject>AlterDPI.App.Program</StartupObject>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../../assets/alterdpi.ico</ApplicationIcon>
+    <AssemblyName>AlterDPI</AssemblyName>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <ProjectReference Include="../AlterDPI.Core/AlterDPI.Core.csproj" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
+    <Resource Include="../../assets/alterdpi.png" Link="assets/alterdpi.png" />
+    <Resource Include="../../assets/alterdpi.ico" Link="assets/alterdpi.ico" />
+    <Content Include="../../third_party/engine/*" Link="engine/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../assets/security/*" Link="security/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../packaging/network.ps1;../../packaging/LegacyDns.psm1" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

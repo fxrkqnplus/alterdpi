@@ -23,6 +23,13 @@ public static class Probes
             }
             catch (Exception e) when (e is HttpRequestException or IOException or JsonException or TaskCanceledException) { token.ThrowIfCancellationRequested(); return new Verification(false, clock.Elapsed.TotalMilliseconds, "C0" + i); }
         }));
-        return new(results.All(x => x.Ok), results.Select(x => x.LatencyMs).Order().ElementAt(results.Length / 2), results.FirstOrDefault(x => !x.Ok)?.Failure ?? "", results.Any(x => x.Transient));
+        return Evaluate(results);
+    }
+    public static Verification Evaluate(IReadOnlyList<Verification> results)
+    {
+        if (results.Count < 2) return new(false, 0, "CHECKS");
+        // Require a confirmed protected endpoint and the neutral baseline; a WAF refusal is inconclusive.
+        var ok = results[0].Ok && results.Skip(1).Any(x => x.Ok);
+        return new(ok, results.Select(x => x.LatencyMs).Order().ElementAt(results.Count / 2), string.Join(",", results.Where(x => !x.Ok).Select(x => x.Failure)), results.Any(x => x.Transient));
     }
 }

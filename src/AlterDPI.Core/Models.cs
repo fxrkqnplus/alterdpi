@@ -35,13 +35,16 @@ public sealed record AppState
 public sealed record Preferences(bool Consent = false, bool Access = false, bool Protection = false);
 public sealed record NetworkInfo(string Key, string Adapter, int Family, int Mtu, int HopLimit, bool Tunnel, bool Mobile, bool Managed, string[] Dns, string[] Suffixes, bool HasIpv6, bool Proxy, int InterfaceIndex = 0);
 public sealed record Profile(string Id, string Label, string[] Args);
-public sealed record GoodProfile(string Network, string EngineId, string Profile, string Resolver, double LatencyMs, DateTimeOffset Saved);
+public sealed record GoodProfile(string Network, string EngineId, string Profile, string Resolver, double LatencyMs, DateTimeOffset Saved, bool Partial = false);
 public sealed record HostException(string Host, DateTimeOffset Expires);
 public sealed record ControlRequest(string Operation, bool? Enabled = null, string? Host = null, string? Token = null, int Offset = 0, string? Id = null);
 public sealed record ControlReply(bool Ok, AppState? State = null, object? Data = null, Problem? Problem = null, string? Id = null);
 public sealed record SignedManifest(string Kind, string Version, long Build, DateTimeOffset Created, DateTimeOffset Expires, ManifestFile[] Files);
 public sealed record ManifestFile(string Path, string Sha256, long Bytes);
-public sealed record Verification(bool Ok, double LatencyMs, string Failure = "", bool Transient = false);
+public sealed record Verification(bool Ok, double LatencyMs, string Failure = "", bool Transient = false)
+{
+    public bool Partial => Ok && Failure.Length > 0;
+}
 
 public static class Profiles
 {

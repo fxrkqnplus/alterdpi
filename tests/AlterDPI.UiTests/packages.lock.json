@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0-windows7.0": {
+      "ARSoft.Tools.Net": {
+        "type": "Transitive",
+        "resolved": "3.6.1",
+        "contentHash": "qVz9bBRZiwG9JHmVKIVCj/gjfiHsoHrh9gDMgY9Uhxfyg+3v8gom4k2oW6Ln8RdeMZ4Ge10OxVXGp77SEHc+xA==",
+        "dependencies": {
+          "BouncyCastle.Cryptography": "2.4.0"
+        }
+      },
+      "BouncyCastle.Cryptography": {
+        "type": "Transitive",
+        "resolved": "2.4.0",
+        "contentHash": "SwXsAV3sMvAU/Nn31pbjhWurYSjJ+/giI/0n6tCrYoupEK34iIHCuk3STAd9fx8yudM85KkLSVdn951vTng/vQ=="
+      },
+      "System.ServiceProcess.ServiceController": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "PaFmFQXX/qL1vl0CfdJUMPMYT8TOEHlcdEiOZtd4LV2rcaS/WDQM4bpECcbRM4BrD+DWkWd/jtb6iPOqAX9TWA=="
+      },
+      "AlterDPI": {
+        "type": "Project",
+        "dependencies": {
+          "AlterDPI.Core": "[0.5.0-fx, )",
+          "System.ServiceProcess.ServiceController": "[10.0.0, )"
+        }
+      },
+      "alterdpi.core": {
+        "type": "Project",
+        "dependencies": {
+          "ARSoft.Tools.Net": "[3.6.1, )"
+        }
+      }
+    },
+    "net10.0-windows7.0/win-x64": {
+      "System.ServiceProcess.ServiceController": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "PaFmFQXX/qL1vl0CfdJUMPMYT8TOEHlcdEiOZtd4LV2rcaS/WDQM4bpECcbRM4BrD+DWkWd/jtb6iPOqAX9TWA=="
+      }
+    }
+  }
+}

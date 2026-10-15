@@ -24,7 +24,7 @@ try {
  $signingKey=if($Keys){Join-Path $Keys 'Application.dpapi'}else{'ci-signing-key'}
  & $Dotnet run --project 'src\AlterDPI.Packager' -- sign 'artifacts\payload' application $signingKey
  if($LASTEXITCODE){throw 'payload signature failed'}
- & $MakeNsis /V2 'packaging\installer.nsi'
+ & $MakeNsis /V2 /INPUTCHARSET UTF8 'packaging\installer.nsi'
  if($LASTEXITCODE){throw 'installer failed'}
  & $Dotnet run --project 'src\AlterDPI.Packager' -- update 'artifacts\release' application $signingKey
  if($LASTEXITCODE){throw 'release signature failed'}
