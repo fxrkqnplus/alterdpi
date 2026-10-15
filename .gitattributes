@@ -1,0 +1,8 @@
+* text=auto eol=lf
+assets/security/** -text
+third_party/engine/** -text
+third_party/licenses/** -text
+*.png binary
+*.ico binary
+*.zip binary
+*.sig binary

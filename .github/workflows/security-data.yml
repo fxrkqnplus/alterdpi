@@ -1,0 +1,39 @@
+name: İmzalı koruma verisi
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * *'
+permissions:
+  contents: read
+jobs:
+  data:
+    if: vars.ALTERDPI_DATA_UPDATES_ENABLED == 'true'
+    runs-on: windows-latest
+    environment: release
+    permissions:
+      contents: write
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
+      ALTERDPI_DATA_SIGNING_KEY: ${{ secrets.ALTERDPI_DATA_SIGNING_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: '10.0.402'
+      - name: Kaynağı indir ve imzala
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/data -Force | Out-Null
+          Invoke-WebRequest 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.mini-onlydomains.txt' -OutFile artifacts/tif.txt
+          dotnet run --project src/AlterDPI.Packager -- seed artifacts/tif.txt artifacts/data ci-signing-key
+          if ($LASTEXITCODE) { throw 'İmza doğrulanamadı' }
+      - name: Yalnız doğrulanmış veriyi yayımla
+        shell: pwsh
+        run: |
+          gh release view security-data --repo fxrkqnplus/alterdpi *> $null
+          if ($LASTEXITCODE) { gh release create security-data --repo fxrkqnplus/alterdpi --title 'Koruma verisi' --notes 'İmzalı alan adı verisi' --prerelease }
+          if ($LASTEXITCODE) { throw 'Veri sürümü hazırlanamadı' }
+          gh release upload security-data artifacts/data/data.json artifacts/data/data.sig artifacts/data/domains.txt --repo fxrkqnplus/alterdpi --clobber
+          if ($LASTEXITCODE) { throw 'Veri yayımlanamadı' }

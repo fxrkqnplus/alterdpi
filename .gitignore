@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+artifacts/
+work/
+*.user
+*.pfx
+*.key
+*-private.pem
+*.dpapi
+*.log
+.vs/

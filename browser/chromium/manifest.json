@@ -1,0 +1,40 @@
+{
+  "version": "0.5.0",
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "blocked.html",
+        "blocked.js",
+        "style.css",
+        "logo.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "name": "AlterDPI",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
+  },
+  "manifest_version": 3,
+  "icons": {
+    "128": "logo.png"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxf09G9cduRu1wQE2eJHrh1D0C/LHwF+wTUF+5FaI6Faq1pfYUjOwGQD4Fz3W1W+4Qwe/+Yhrt5Xp1Pg0fDze1KLlO8oSlgQzdMxCgfUzEhdbD/wzgTXQOfRJKGAMRNGxcdakiDcW3FGbiPIgMu9bgx9StGAkP5wwM9w+70lV6jRxgUMUeTmoQxif0MI6w20U9SKHaiIJiKv+R/VwNbByTHH8X7IV1A58f4BRtbk/HQZMpkBpKluWsOERnmZyLw3Axj/Eq470/3i2wGRwmTFGVez7pcAa2R2VHG0OzVzvcv8RcurlgjbYIegCWNhVvMNHrJtcfrJOG/cEwrUe92XRiQIDAQAB",
+  "permissions": [
+    "nativeMessaging",
+    "declarativeNetRequest",
+    "tabs",
+    "webNavigation",
+    "storage",
+    "alarms"
+  ],
+  "description": "Bilinen zararlı alan adları için AlterDPI uyarı ekranı."
+}

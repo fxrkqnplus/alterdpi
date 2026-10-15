@@ -1,0 +1,52 @@
+{
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "alterdpi@fxrkqnplus",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "version": "0.5.0",
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "blocked.html",
+        "blocked.js",
+        "style.css",
+        "logo.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "name": "AlterDPI",
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
+  },
+  "manifest_version": 3,
+  "icons": {
+    "128": "logo.png"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "declarativeNetRequest",
+    "tabs",
+    "webNavigation",
+    "storage",
+    "alarms"
+  ],
+  "description": "Bilinen zararlı alan adları için AlterDPI uyarı ekranı."
+}
